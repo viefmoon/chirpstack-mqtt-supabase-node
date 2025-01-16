@@ -40,24 +40,30 @@ async function main() {
   client.on("message", async (topic, message) => {
     try {
       const payloadStr = message.toString();
+      console.log("Mensaje MQTT recibido:", payloadStr);
       const dataJson = JSON.parse(payloadStr);
+      console.log("JSON parseado:", dataJson);
 
       // Ejemplo de parseo (ajusta según tu estructura):
       const deviceEui = dataJson.deviceInfo?.devEui || "unknown";
       const fCnt = dataJson.fCnt || 0;
       const fPort = dataJson.fPort || 0;
-      const time = dataJson.time || new Date().toISOString(); // si no viene en el payload
+      const time = dataJson.time || new Date().toISOString();
+
+      const insertData = {
+        device_eui: deviceEui,
+        f_cnt: fCnt,
+        f_port: fPort,
+        data: dataJson,
+        time: time,
+      };
+
+      console.log("Datos a insertar en Supabase:", insertData);
 
       // Insertar en Supabase
-      const { data, error } = await supabase.from(SUPABASE_TABLE).insert([
-        {
-          device_eui: deviceEui,
-          f_cnt: fCnt,
-          f_port: fPort,
-          data: dataJson, // Insertamos el JSON completo
-          time: time,
-        },
-      ]);
+      const { data, error } = await supabase
+        .from(SUPABASE_TABLE)
+        .insert([insertData]);
 
       if (error) {
         console.error("Error al insertar en Supabase:", error);
