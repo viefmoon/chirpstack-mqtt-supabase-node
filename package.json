@@ -1,0 +1,25 @@
+{
+  "name": "chirpstack-mqtt-supabase-node",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/viefmoon/chirpstack-mqtt-supabase-node.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/viefmoon/chirpstack-mqtt-supabase-node/issues"
+  },
+  "homepage": "https://github.com/viefmoon/chirpstack-mqtt-supabase-node#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.47.15",
+    "dotenv": "^16.4.7",
+    "mqtt": "^5.10.3"
+  }
+}
