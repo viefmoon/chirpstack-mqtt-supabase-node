@@ -34,8 +34,8 @@ async function handleDevice(deviceId, stationId) {
   if (!existingDevice) {
     const { data: insertedDevice, error: deviceInsertError } = await supabase
       .from(DEVICES_TABLE)
-      .insert([{ id: deviceId, station_id: stationId, isActive: true }]);
-    
+      .insert([{ id: deviceId, station_id: stationId, is_active: true }]);
+
     if (deviceInsertError) {
       console.error("Error al insertar el dispositivo:", deviceInsertError);
     } else {
@@ -48,10 +48,11 @@ async function handleDevice(deviceId, stationId) {
 
 // Función para manejar lecturas de voltaje
 async function handleVoltageReading(deviceId, voltage, timestamp) {
-  const { data: voltageReadingData, error: voltageReadingError } = await supabase
-    .from(VOLTAGE_READINGS_TABLE)
-    .insert([{ device_id: deviceId, voltage, timestamp }]);
-  
+  const { data: voltageReadingData, error: voltageReadingError } =
+    await supabase
+      .from(VOLTAGE_READINGS_TABLE)
+      .insert([{ device_id: deviceId, voltage_value: voltage, timestamp }]);
+
   if (voltageReadingError) {
     console.error("Error al insertar voltage reading:", voltageReadingError);
   } else {
@@ -71,7 +72,10 @@ async function handleSensor(sensor, stationId, timestamp) {
     .maybeSingle();
 
   if (sensorSelectError) {
-    console.error(`Error al consultar el sensor ${sensor.id}:`, sensorSelectError);
+    console.error(
+      `Error al consultar el sensor ${sensor.id}:`,
+      sensorSelectError
+    );
     return;
   }
 
@@ -79,16 +83,21 @@ async function handleSensor(sensor, stationId, timestamp) {
   if (!existingSensor) {
     const { error: sensorInsertError } = await supabase
       .from(SENSORS_TABLE)
-      .insert([{ 
-        id: sensor.id, 
-        name: "", 
-        sensor_type_id: sensor.t, 
-        id_active: true, 
-        station: stationId 
-      }]);
-    
+      .insert([
+        {
+          id: sensor.id,
+          name: "",
+          sensor_type_id: sensor.t,
+          is_active: true,
+          station_id: stationId,
+        },
+      ]);
+
     if (sensorInsertError) {
-      console.error(`Error al insertar el sensor ${sensor.id}:`, sensorInsertError);
+      console.error(
+        `Error al insertar el sensor ${sensor.id}:`,
+        sensorInsertError
+      );
       return;
     }
   }
@@ -97,9 +106,12 @@ async function handleSensor(sensor, stationId, timestamp) {
   const { error: sensorReadingError } = await supabase
     .from(READINGS_TABLE)
     .insert([{ sensor_id: sensor.id, value: sensor.v, timestamp }]);
-  
+
   if (sensorReadingError) {
-    console.error(`Error al insertar lectura para el sensor ${sensor.id}:`, sensorReadingError);
+    console.error(
+      `Error al insertar lectura para el sensor ${sensor.id}:`,
+      sensorReadingError
+    );
   }
 }
 
@@ -108,20 +120,30 @@ async function processMQTTMessage(topic, message) {
   try {
     const payloadStr = message.toString();
     const dataJson = JSON.parse(payloadStr);
-    
+
     // Decodificación de datos Base64
     if (!dataJson.data) {
       console.error("No se encontró el campo 'data' en el mensaje.");
       return;
     }
 
-    const decodedDataStr = Buffer.from(dataJson.data, "base64").toString("utf8");
+    const decodedDataStr = Buffer.from(dataJson.data, "base64").toString(
+      "utf8"
+    );
     const decodedData = JSON.parse(decodedDataStr);
     dataJson.decodedPayload = decodedData;
 
     // Extraer variables importantes
-    const { d: deviceId, st: stationId, ts, s: sensors, vt: voltage } = decodedData;
-    const timestampISO = ts ? new Date(ts * 1000).toISOString() : new Date().toISOString();
+    const {
+      d: deviceId,
+      st: stationId,
+      ts,
+      s: sensors,
+      vt: voltage,
+    } = decodedData;
+    const timestampISO = ts
+      ? new Date(ts * 1000).toISOString()
+      : new Date().toISOString();
 
     // Procesar dispositivo
     if (deviceId) {
@@ -139,7 +161,6 @@ async function processMQTTMessage(topic, message) {
         await handleSensor(sensor, stationId, timestampISO);
       }
     }
-
   } catch (err) {
     console.error("Error al procesar mensaje:", err);
   }
@@ -149,7 +170,7 @@ async function processMQTTMessage(topic, message) {
 async function main() {
   const brokerUrl = `mqtt://${MQTT_HOST}:${MQTT_PORT}`;
   const client = mqtt.connect(brokerUrl);
-  
+
   client.on("connect", () => {
     console.log("Conectado al broker MQTT con éxito.");
     client.subscribe(MQTT_TOPIC, (err) => {
@@ -160,9 +181,9 @@ async function main() {
       }
     });
   });
-  
+
   client.on("message", processMQTTMessage);
-  
+
   client.on("error", (err) => {
     console.error("Error en la conexión MQTT:", err);
   });
