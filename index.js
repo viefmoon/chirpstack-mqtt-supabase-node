@@ -4,7 +4,7 @@ const { createClient } = require("@supabase/supabase-js");
 
 // Variables de entorno y configuración
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const MQTT_HOST = process.env.MQTT_HOST || "localhost";
 const MQTT_PORT = process.env.MQTT_PORT || 1883;
 const MQTT_TOPIC = process.env.MQTT_TOPIC || "application/#";
@@ -16,7 +16,7 @@ const READINGS_TABLE = "readings";
 const SENSORS_TABLE = "sensors";
 
 // Inicializamos el cliente de Supabase
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // Funciones auxiliares para manejar dispositivos
 async function handleDevice(deviceId, stationId) {
