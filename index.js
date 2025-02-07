@@ -44,6 +44,20 @@ async function main() {
       const dataJson = JSON.parse(payloadStr);
       console.log("JSON parseado:", dataJson);
 
+      // Si 'data' existe y es una cadena, asumimos que está codificada en Base64
+      if (dataJson.data && typeof dataJson.data === "string") {
+        const decodedDataStr = Buffer.from(dataJson.data, "base64").toString("utf8");
+        try {
+          // Intentamos parsear la data decodificada a JSON
+          dataJson.data = JSON.parse(decodedDataStr);
+          console.log("Datos decodificados:", dataJson.data);
+        } catch (parseError) {
+          console.error("Error al parsear la data decodificada, se conservará como string:", parseError);
+          // En caso de error, se conserva la data decodificada como cadena
+          dataJson.data = decodedDataStr;
+        }
+      }
+
       // Ejemplo de parseo (ajusta según tu estructura):
       const deviceEui = dataJson.deviceInfo?.devEui || "unknown";
       const fCnt = dataJson.fCnt || 0;
