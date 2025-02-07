@@ -19,7 +19,72 @@ const SENSORS_TABLE = "sensors";
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // Funciones auxiliares para manejar dispositivos
+async function handleStation(stationId) {
+  const { data: existingStation, error: stationSelectError } = await supabase
+    .from("stations")
+    .select("*")
+    .eq("id", stationId)
+    .maybeSingle();
+
+  if (stationSelectError) {
+    console.error("Error al consultar la estación:", stationSelectError);
+    return false;
+  }
+
+  if (!existingStation) {
+    const { error: stationInsertError } = await supabase
+      .from("stations")
+      .insert([
+        { id: stationId, name: `Estación ${stationId}`, is_active: true },
+      ]);
+
+    if (stationInsertError) {
+      console.error("Error al insertar la estación:", stationInsertError);
+      return false;
+    }
+  }
+  return true;
+}
+
+// Función para verificar y crear el tipo de sensor si no existe
+async function handleSensorType(sensorTypeId) {
+  const { data: existingSensorType, error: sensorTypeSelectError } =
+    await supabase
+      .from("sensor_types")
+      .select("*")
+      .eq("id", sensorTypeId)
+      .maybeSingle();
+
+  if (sensorTypeSelectError) {
+    console.error(
+      "Error al consultar el tipo de sensor:",
+      sensorTypeSelectError
+    );
+    return false;
+  }
+
+  if (!existingSensorType) {
+    const { error: sensorTypeInsertError } = await supabase
+      .from("sensor_types")
+      .insert([{ id: sensorTypeId, name: `Tipo Sensor ${sensorTypeId}` }]);
+
+    if (sensorTypeInsertError) {
+      console.error(
+        "Error al insertar el tipo de sensor:",
+        sensorTypeInsertError
+      );
+      return false;
+    }
+  }
+  return true;
+}
+
+// Modificar la función handleDevice para usar handleStation
 async function handleDevice(deviceId, stationId) {
+  // Primero verificar y crear la estación si es necesario
+  const stationExists = await handleStation(stationId);
+  if (!stationExists) return;
+
   const { data: existingDevice, error: deviceSelectError } = await supabase
     .from(DEVICES_TABLE)
     .select("*")
@@ -60,9 +125,13 @@ async function handleVoltageReading(deviceId, voltage, timestamp) {
   }
 }
 
-// Función para manejar sensores y sus lecturas
+// Modificar la función handleSensor para usar handleSensorType
 async function handleSensor(sensor, stationId, timestamp) {
   if (!sensor.id) return;
+
+  // Primero verificar y crear el tipo de sensor si es necesario
+  const sensorTypeExists = await handleSensorType(sensor.t);
+  if (!sensorTypeExists) return;
 
   // Verificar si el sensor existe
   const { data: existingSensor, error: sensorSelectError } = await supabase
