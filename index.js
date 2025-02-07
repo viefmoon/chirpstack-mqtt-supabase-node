@@ -44,32 +44,28 @@ async function main() {
       const dataJson = JSON.parse(payloadStr);
       console.log("JSON parseado:", dataJson);
 
-      // Si 'data' existe y es una cadena, asumimos que está codificada en Base64
-      if (dataJson.data && typeof dataJson.data === "string") {
-        const decodedDataStr = Buffer.from(dataJson.data, "base64").toString("utf8");
-        try {
-          // Intentamos parsear la data decodificada a JSON
-          dataJson.data = JSON.parse(decodedDataStr);
-          console.log("Datos decodificados:", dataJson.data);
-        } catch (parseError) {
-          console.error("Error al parsear la data decodificada, se conservará como string:", parseError);
-          // En caso de error, se conserva la data decodificada como cadena
-          dataJson.data = decodedDataStr;
-        }
+      // Decodificamos la data que viene en Base64
+      let decodedData = null;
+      if (dataJson.data) {
+        const decodedDataStr = Buffer.from(dataJson.data, 'base64').toString('utf8');
+        decodedData = JSON.parse(decodedDataStr);
+        console.log("Datos decodificados:", decodedData);
+        
+        // Agregamos la data decodificada al objeto dataJson
+        dataJson.decodedPayload = decodedData;
       }
 
-      // Ejemplo de parseo (ajusta según tu estructura):
-      const deviceEui = dataJson.deviceInfo?.devEui || "unknown";
-      const fCnt = dataJson.fCnt || 0;
-      const fPort = dataJson.fPort || 0;
-      const time = dataJson.time || new Date().toISOString();
-
+      // Preparamos los datos para insertar
       const insertData = {
-        device_eui: deviceEui,
-        f_cnt: fCnt,
-        f_port: fPort,
-        data: dataJson,
-        time: time,
+        device_eui: dataJson.deviceInfo?.devEui || "unknown",
+        f_cnt: dataJson.fCnt || 0,
+        f_port: dataJson.fPort || 0,
+        raw_data: dataJson,           // datos originales completos
+        decoded_data: decodedData,    // datos decodificados
+        time: dataJson.time || new Date().toISOString(),
+        station_id: decodedData?.st || null,
+        device_id: decodedData?.d || null,
+        sensors: decodedData?.s || []
       };
 
       console.log("Datos a insertar en Supabase:", insertData);
