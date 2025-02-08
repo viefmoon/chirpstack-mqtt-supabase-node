@@ -196,11 +196,12 @@ async function processMQTTMessage(topic, message) {
       return;
     }
 
-    const decodedDataStr = Buffer.from(dataJson.data, "base64").toString(
-      "utf8"
-    );
+    const decodedDataStr = Buffer.from(dataJson.data, "base64").toString("utf8");
     const decodedData = JSON.parse(decodedDataStr);
     dataJson.decodedPayload = decodedData;
+
+    // Imprimir datos decodificados
+    console.log('Datos decodificados:', decodedData);
 
     // Extraer variables importantes
     const {
