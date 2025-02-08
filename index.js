@@ -15,6 +15,19 @@ const VOLTAGE_READINGS_TABLE = "voltage_readings";
 const READINGS_TABLE = "readings";
 const SENSORS_TABLE = "sensors";
 
+// Agregar el mapeo de enum a ID de tipo de sensor
+const SENSOR_TYPE_ENUM_MAP = {
+  0: 'N100K',    // NTC 100K
+  1: 'N10K',     // NTC 10K
+  2: 'WNTC10K',  // Water NTC 10K
+  3: 'RTD',      // RTD
+  4: 'DS18B20',  // DS18B20
+  5: 'PH',       // PH
+  6: 'COND',     // Conductivity
+  7: 'CONDH',    // Condensation Humidity
+  8: 'SOILH'     // Soil Humidity
+};
+
 // Inicializamos el cliente de Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -46,37 +59,37 @@ async function handleStation(stationId) {
   return true;
 }
 
-// Función para verificar y crear el tipo de sensor si no existe
-async function handleSensorType(sensorTypeId) {
-  const { data: existingSensorType, error: sensorTypeSelectError } =
-    await supabase
-      .from("sensor_types")
-      .select("*")
-      .eq("id", sensorTypeId)
-      .maybeSingle();
+// Modificar la función handleSensorType para usar el mapeo
+async function handleSensorType(sensorTypeEnum) {
+  const sensorTypeId = SENSOR_TYPE_ENUM_MAP[sensorTypeEnum];
+  
+  if (!sensorTypeId) {
+    console.error(`Tipo de sensor no válido: ${sensorTypeEnum}`);
+    return false;
+  }
+
+  const { data: existingSensorType, error: sensorTypeSelectError } = await supabase
+    .from("sensor_types")
+    .select("*")
+    .eq("id", sensorTypeId)
+    .maybeSingle();
 
   if (sensorTypeSelectError) {
-    console.error(
-      "Error al consultar el tipo de sensor:",
-      sensorTypeSelectError
-    );
+    console.error("Error al consultar el tipo de sensor:", sensorTypeSelectError);
     return false;
   }
 
   if (!existingSensorType) {
     const { error: sensorTypeInsertError } = await supabase
       .from("sensor_types")
-      .insert([{ id: sensorTypeId, name: `Tipo Sensor ${sensorTypeId}` }]);
+      .insert([{ id: sensorTypeId, name: sensorTypeId }]);
 
     if (sensorTypeInsertError) {
-      console.error(
-        "Error al insertar el tipo de sensor:",
-        sensorTypeInsertError
-      );
+      console.error("Error al insertar el tipo de sensor:", sensorTypeInsertError);
       return false;
     }
   }
-  return true;
+  return sensorTypeId;
 }
 
 // Modificar la función handleDevice para usar handleStation
@@ -125,13 +138,13 @@ async function handleVoltageReading(deviceId, voltage, timestamp) {
   }
 }
 
-// Modificar la función handleSensor para usar handleSensorType
+// Modificar la función handleSensor para manejar el nuevo retorno de handleSensorType
 async function handleSensor(sensor, stationId, timestamp) {
   if (!sensor.id) return;
 
-  // Primero verificar y crear el tipo de sensor si es necesario
-  const sensorTypeExists = await handleSensorType(sensor.t);
-  if (!sensorTypeExists) return;
+  // Verificar y crear el tipo de sensor si es necesario
+  const sensorTypeId = await handleSensorType(sensor.t);
+  if (!sensorTypeId) return;
 
   // Verificar si el sensor existe
   const { data: existingSensor, error: sensorSelectError } = await supabase
@@ -141,14 +154,10 @@ async function handleSensor(sensor, stationId, timestamp) {
     .maybeSingle();
 
   if (sensorSelectError) {
-    console.error(
-      `Error al consultar el sensor ${sensor.id}:`,
-      sensorSelectError
-    );
+    console.error(`Error al consultar el sensor ${sensor.id}:`, sensorSelectError);
     return;
   }
 
-  // Crear sensor si no existe
   if (!existingSensor) {
     const { error: sensorInsertError } = await supabase
       .from(SENSORS_TABLE)
@@ -156,17 +165,14 @@ async function handleSensor(sensor, stationId, timestamp) {
         {
           id: sensor.id,
           name: "",
-          sensor_type_id: sensor.t,
+          sensor_type_id: sensorTypeId,
           is_active: true,
           station_id: stationId,
         },
       ]);
 
     if (sensorInsertError) {
-      console.error(
-        `Error al insertar el sensor ${sensor.id}:`,
-        sensorInsertError
-      );
+      console.error(`Error al insertar el sensor ${sensor.id}:`, sensorInsertError);
       return;
     }
   }
