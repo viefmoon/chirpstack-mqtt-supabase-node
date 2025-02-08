@@ -129,22 +129,29 @@ async function handleVoltageReading(deviceId, voltage, timestamp) {
   const { data: voltageReadingData, error: voltageReadingError } =
     await supabase
       .from(VOLTAGE_READINGS_TABLE)
-      .insert([{ device_id: deviceId, voltage_value: voltage, timestamp }]);
+      .insert([{ device_id: deviceId, voltage_value: voltage, timestamp }])
+      .select();
 
   if (voltageReadingError) {
     console.error("Error al insertar voltage reading:", voltageReadingError);
   } else {
-    console.log("Voltage reading insertado:", voltageReadingData);
+    console.log("Voltage reading insertado:", voltageReadingData[0]);
   }
 }
 
-// Modificar la función handleSensor para manejar el nuevo retorno de handleSensorType
+// Modificar la función handleSensor para manejar valores nulos
 async function handleSensor(sensor, stationId, timestamp) {
   if (!sensor.id) return;
 
   // Verificar y crear el tipo de sensor si es necesario
   const sensorTypeId = await handleSensorType(sensor.t);
   if (!sensorTypeId) return;
+
+  // Si el valor es null, no insertar la lectura
+  if (sensor.v === null) {
+    console.log(`Omitiendo lectura nula para sensor ${sensor.id}`);
+    return;
+  }
 
   // Verificar si el sensor existe
   const { data: existingSensor, error: sensorSelectError } = await supabase
@@ -177,10 +184,14 @@ async function handleSensor(sensor, stationId, timestamp) {
     }
   }
 
-  // Insertar lectura del sensor
+  // Insertar lectura del sensor solo si el valor no es nulo
   const { error: sensorReadingError } = await supabase
     .from(READINGS_TABLE)
-    .insert([{ sensor_id: sensor.id, value: sensor.v, timestamp }]);
+    .insert([{ 
+      sensor_id: sensor.id, 
+      value: sensor.v,
+      timestamp 
+    }]);
 
   if (sensorReadingError) {
     console.error(
@@ -217,9 +228,13 @@ async function processMQTTMessage(topic, message) {
       s: sensors,
       vt: voltage,
     } = decodedData;
+
+    // Asegurarnos de que el timestamp se maneje como UTC
     const timestampISO = ts
-      ? new Date(ts * 1000).toISOString()
-      : new Date().toISOString();
+      ? new Date(ts * 1000).toISOString() // ts * 1000 convierte de segundos Unix a milisegundos
+      : new Date().toISOString(); // Fecha actual en UTC
+
+    console.log('Timestamp UTC procesado:', timestampISO);
 
     // Procesar dispositivo
     if (deviceId) {
