@@ -19,7 +19,7 @@ const SENSORS_TABLE = "sensors";
 const SENSOR_TYPE_ENUM_MAP = {
   0: 'N100K',    // NTC 100K
   1: 'N10K',     // NTC 10K
-  2: 'WNTC10K',  // Water NTC 10K
+  2: 'HDS10',  // Water NTC 10K
   3: 'RTD',      // RTD
   4: 'DS18B20',  // DS18B20
   5: 'PH',       // PH
@@ -205,52 +205,45 @@ async function handleSensor(sensor, stationId, timestamp) {
 async function processMQTTMessage(topic, message) {
   try {
     const payloadStr = message.toString();
-    const dataJson = JSON.parse(payloadStr);
-
-    // Decodificación de datos Base64
-    if (!dataJson.data) {
-      console.error("No se encontró el campo 'data' en el mensaje.");
-      return;
-    }
-
-    const decodedDataStr = Buffer.from(dataJson.data, "base64").toString("utf8");
-    const decodedData = JSON.parse(decodedDataStr);
-    dataJson.decodedPayload = decodedData;
-
-    // Imprimir datos decodificados
-    console.log('Datos decodificados:', decodedData);
-
-    // Extraer variables importantes
-    const {
-      d: deviceId,
-      st: stationId,
-      ts,
-      s: sensors,
-      vt: voltage,
-    } = decodedData;
-
-    // Asegurarnos de que el timestamp se maneje como UTC
-    const timestampISO = ts
-      ? new Date(ts * 1000).toISOString() // ts * 1000 convierte de segundos Unix a milisegundos
-      : new Date().toISOString(); // Fecha actual en UTC
-
-    console.log('Timestamp UTC procesado:', timestampISO);
+    
+    // Dividir el mensaje por pipes
+    const [stationId, deviceId, voltage, timestamp, ...sensorData] = payloadStr.split('|');
+    
+    // Convertir el timestamp a formato ISO
+    const timestampISO = new Date(parseInt(timestamp) * 1000).toISOString();
+    
+    console.log('Datos recibidos:', {
+      stationId,
+      deviceId,
+      voltage,
+      timestamp: timestampISO
+    });
 
     // Procesar dispositivo
-    if (deviceId) {
+    if (deviceId && stationId) {
       await handleDevice(deviceId, stationId);
     }
 
     // Procesar lectura de voltaje
     if (deviceId && voltage !== undefined && voltage !== null) {
-      await handleVoltageReading(deviceId, voltage, timestampISO);
+      await handleVoltageReading(deviceId, parseFloat(voltage), timestampISO);
     }
 
     // Procesar sensores
-    if (Array.isArray(sensors)) {
-      for (const sensor of sensors) {
-        await handleSensor(sensor, stationId, timestampISO);
-      }
+    for (const sensorStr of sensorData) {
+      const [sensorId, sensorType, sensorValue] = sensorStr.split(',');
+      
+      // Convertir 'nan' a null para valores no disponibles
+      const value = sensorValue.toLowerCase() === 'nan' ? null : parseFloat(sensorValue);
+      
+      // Crear objeto sensor con el formato esperado por handleSensor
+      const sensor = {
+        id: sensorId,
+        t: parseInt(sensorType),
+        v: value
+      };
+      
+      await handleSensor(sensor, stationId, timestampISO);
     }
   } catch (err) {
     console.error("Error al procesar mensaje:", err);
