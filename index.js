@@ -205,48 +205,96 @@ async function handleSensor(sensor, stationId, timestamp) {
 async function processMQTTMessage(topic, message) {
   try {
     const payloadStr = message.toString();
+    console.log('Mensaje MQTT recibido:', {
+      topic,
+      payload: payloadStr
+    });
     
     // Dividir el mensaje por pipes
-    const [stationId, deviceId, voltage, timestamp, ...sensorData] = payloadStr.split('|');
+    const parts = payloadStr.split('|');
+    console.log('Partes del mensaje:', parts);
     
-    // Convertir el timestamp a formato ISO
-    const timestampISO = new Date(parseInt(timestamp) * 1000).toISOString();
+    const [stationId, deviceId, voltage, timestamp, ...sensorData] = parts;
     
-    console.log('Datos recibidos:', {
+    console.log('Valores extraídos:', {
       stationId,
       deviceId,
       voltage,
-      timestamp: timestampISO
+      timestamp: timestamp,
+      timestampNumber: parseInt(timestamp),
+      sensorData
     });
-
-    // Procesar dispositivo
-    if (deviceId && stationId) {
-      await handleDevice(deviceId, stationId);
+    
+    // Validar timestamp antes de convertirlo
+    const timestampNum = parseInt(timestamp);
+    if (isNaN(timestampNum)) {
+      console.error('Error: El timestamp no es un número válido:', timestamp);
+      return;
     }
+    
+    // Convertir el timestamp a formato ISO
+    try {
+      const timestampISO = new Date(timestampNum * 1000).toISOString();
+      console.log('Timestamp convertido:', {
+        original: timestamp,
+        parsed: timestampNum,
+        multiplied: timestampNum * 1000,
+        iso: timestampISO
+      });
+    
+      console.log('Datos recibidos:', {
+        stationId,
+        deviceId,
+        voltage,
+        timestamp: timestampISO
+      });
 
-    // Procesar lectura de voltaje
-    if (deviceId && voltage !== undefined && voltage !== null) {
-      await handleVoltageReading(deviceId, parseFloat(voltage), timestampISO);
-    }
+      // Procesar dispositivo
+      if (deviceId && stationId) {
+        await handleDevice(deviceId, stationId);
+      }
 
-    // Procesar sensores
-    for (const sensorStr of sensorData) {
-      const [sensorId, sensorType, sensorValue] = sensorStr.split(',');
-      
-      // Convertir 'nan' a null para valores no disponibles
-      const value = sensorValue.toLowerCase() === 'nan' ? null : parseFloat(sensorValue);
-      
-      // Crear objeto sensor con el formato esperado por handleSensor
-      const sensor = {
-        id: sensorId,
-        t: parseInt(sensorType),
-        v: value
-      };
-      
-      await handleSensor(sensor, stationId, timestampISO);
+      // Procesar lectura de voltaje
+      if (deviceId && voltage !== undefined && voltage !== null) {
+        await handleVoltageReading(deviceId, parseFloat(voltage), timestampISO);
+      }
+
+      // Procesar sensores
+      for (const sensorStr of sensorData) {
+        console.log('Procesando sensor:', sensorStr);
+        const [sensorId, sensorType, sensorValue] = sensorStr.split(',');
+        
+        // Convertir 'nan' a null para valores no disponibles
+        const value = sensorValue.toLowerCase() === 'nan' ? null : parseFloat(sensorValue);
+        
+        console.log('Datos del sensor:', {
+          sensorId,
+          sensorType,
+          sensorValue,
+          parsedValue: value
+        });
+        
+        // Crear objeto sensor con el formato esperado por handleSensor
+        const sensor = {
+          id: sensorId,
+          t: parseInt(sensorType),
+          v: value
+        };
+        
+        await handleSensor(sensor, stationId, timestampISO);
+      }
+    } catch (timeError) {
+      console.error('Error al procesar el timestamp:', {
+        timestamp,
+        error: timeError.message,
+        stack: timeError.stack
+      });
     }
   } catch (err) {
-    console.error("Error al procesar mensaje:", err);
+    console.error("Error al procesar mensaje:", {
+      error: err.message,
+      stack: err.stack
+    });
   }
 }
 
