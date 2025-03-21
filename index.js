@@ -210,8 +210,15 @@ async function processMQTTMessage(topic, message) {
       payload: payloadStr
     });
     
-    // Dividir el mensaje por pipes
-    const parts = payloadStr.split('|');
+    // Primero parseamos el JSON del mensaje
+    const messageJson = JSON.parse(payloadStr);
+    
+    // Decodificamos el campo data que está en Base64
+    const decodedData = Buffer.from(messageJson.data, 'base64').toString('utf8');
+    console.log('Datos decodificados:', decodedData);
+    
+    // Ahora procesamos los datos decodificados
+    const parts = decodedData.split('|');
     console.log('Partes del mensaje:', parts);
     
     const [stationId, deviceId, voltage, timestamp, ...sensorData] = parts;
