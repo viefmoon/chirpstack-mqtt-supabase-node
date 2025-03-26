@@ -17,15 +17,33 @@ const SENSORS_TABLE = "sensors";
 
 // Agregar el mapeo de enum a ID de tipo de sensor
 const SENSOR_TYPE_ENUM_MAP = {
-  0: 'N100K',    // NTC 100K
-  1: 'N10K',     // NTC 10K
-  2: 'HDS10',  // Water NTC 10K
-  3: 'RTD',      // RTD
-  4: 'DS18B20',  // DS18B20
-  5: 'PH',       // PH
-  6: 'COND',     // Conductivity
-  7: 'CONDH',    // Condensation Humidity
-  8: 'SOILH'     // Soil Humidity
+  0: "N100K", // NTC 100K
+  1: "N10K", // NTC 10K
+  2: "HDS10", // Condensation Humidity
+  3: "RTD", // RTD
+  4: "DS18B20", // DS18B20
+  5: "PH", // PH
+  6: "COND", // Conductivity
+  7: "CONDH", // Condensation Humidity
+  8: "SOILH", // Soil Humidity
+  9: "TEMP_A", // Temperatura ambiente
+  10: "HUM_A", // Humedad ambiente
+  11: "PRESS_A", // Presión atmosférica
+  12: "CO2", // Dióxido de Carbono
+  13: "LIGHT", // Luz Ambiental
+  14: "ROOTH", // Humedad de Raíz
+  15: "LEAFH", // Humedad de Hoja
+  // SENSORES MULTIPLES
+  100: "SHT30", // Sensor SHT30 (tipo general para el sensor completo - SENSOR MÚLTIPLE)
+};
+
+// Mapa para los sensores que envían múltiples valores
+const MULTI_SENSOR_MAP = {
+  100: [
+    // SHT30
+    { id_suffix: "_T", typeEnum: 9, index: 0 }, // Temperatura
+    { id_suffix: "_H", typeEnum: 10, index: 1 }, // Humedad
+  ],
 };
 
 // Inicializamos el cliente de Supabase
@@ -62,20 +80,24 @@ async function handleStation(stationId) {
 // Modificar la función handleSensorType para usar el mapeo
 async function handleSensorType(sensorTypeEnum) {
   const sensorTypeId = SENSOR_TYPE_ENUM_MAP[sensorTypeEnum];
-  
+
   if (!sensorTypeId) {
     console.error(`Tipo de sensor no válido: ${sensorTypeEnum}`);
     return false;
   }
 
-  const { data: existingSensorType, error: sensorTypeSelectError } = await supabase
-    .from("sensor_types")
-    .select("*")
-    .eq("id", sensorTypeId)
-    .maybeSingle();
+  const { data: existingSensorType, error: sensorTypeSelectError } =
+    await supabase
+      .from("sensor_types")
+      .select("*")
+      .eq("id", sensorTypeId)
+      .maybeSingle();
 
   if (sensorTypeSelectError) {
-    console.error("Error al consultar el tipo de sensor:", sensorTypeSelectError);
+    console.error(
+      "Error al consultar el tipo de sensor:",
+      sensorTypeSelectError
+    );
     return false;
   }
 
@@ -85,7 +107,10 @@ async function handleSensorType(sensorTypeEnum) {
       .insert([{ id: sensorTypeId, name: sensorTypeId }]);
 
     if (sensorTypeInsertError) {
-      console.error("Error al insertar el tipo de sensor:", sensorTypeInsertError);
+      console.error(
+        "Error al insertar el tipo de sensor:",
+        sensorTypeInsertError
+      );
       return false;
     }
   }
@@ -161,7 +186,10 @@ async function handleSensor(sensor, stationId, timestamp) {
     .maybeSingle();
 
   if (sensorSelectError) {
-    console.error(`Error al consultar el sensor ${sensor.id}:`, sensorSelectError);
+    console.error(
+      `Error al consultar el sensor ${sensor.id}:`,
+      sensorSelectError
+    );
     return;
   }
 
@@ -179,7 +207,10 @@ async function handleSensor(sensor, stationId, timestamp) {
       ]);
 
     if (sensorInsertError) {
-      console.error(`Error al insertar el sensor ${sensor.id}:`, sensorInsertError);
+      console.error(
+        `Error al insertar el sensor ${sensor.id}:`,
+        sensorInsertError
+      );
       return;
     }
   }
@@ -187,11 +218,13 @@ async function handleSensor(sensor, stationId, timestamp) {
   // Insertar lectura del sensor solo si el valor no es nulo
   const { error: sensorReadingError } = await supabase
     .from(READINGS_TABLE)
-    .insert([{ 
-      sensor_id: sensor.id, 
-      value: sensor.v,
-      timestamp 
-    }]);
+    .insert([
+      {
+        sensor_id: sensor.id,
+        value: sensor.v,
+        timestamp,
+      },
+    ]);
 
   if (sensorReadingError) {
     console.error(
@@ -205,55 +238,57 @@ async function handleSensor(sensor, stationId, timestamp) {
 async function processMQTTMessage(topic, message) {
   try {
     const payloadStr = message.toString();
-    console.log('Mensaje MQTT recibido:', {
+    console.log("Mensaje MQTT recibido:", {
       topic,
-      payload: payloadStr
+      payload: payloadStr,
     });
-    
+
     // Primero parseamos el JSON del mensaje
     const messageJson = JSON.parse(payloadStr);
-    
+
     // Decodificamos el campo data que está en Base64
-    const decodedData = Buffer.from(messageJson.data, 'base64').toString('utf8');
-    console.log('Datos decodificados:', decodedData);
-    
+    const decodedData = Buffer.from(messageJson.data, "base64").toString(
+      "utf8"
+    );
+    console.log("Datos decodificados:", decodedData);
+
     // Ahora procesamos los datos decodificados
-    const parts = decodedData.split('|');
-    console.log('Partes del mensaje:', parts);
-    
+    const parts = decodedData.split("|");
+    console.log("Partes del mensaje:", parts);
+
     const [stationId, deviceId, voltage, timestamp, ...sensorData] = parts;
-    
-    console.log('Valores extraídos:', {
+
+    console.log("Valores extraídos:", {
       stationId,
       deviceId,
       voltage,
       timestamp: timestamp,
       timestampNumber: parseInt(timestamp),
-      sensorData
+      sensorData,
     });
-    
+
     // Validar timestamp antes de convertirlo
     const timestampNum = parseInt(timestamp);
     if (isNaN(timestampNum)) {
-      console.error('Error: El timestamp no es un número válido:', timestamp);
+      console.error("Error: El timestamp no es un número válido:", timestamp);
       return;
     }
-    
+
     // Convertir el timestamp a formato ISO
     try {
       const timestampISO = new Date(timestampNum * 1000).toISOString();
-      console.log('Timestamp convertido:', {
+      console.log("Timestamp convertido:", {
         original: timestamp,
         parsed: timestampNum,
         multiplied: timestampNum * 1000,
-        iso: timestampISO
+        iso: timestampISO,
       });
-    
-      console.log('Datos recibidos:', {
+
+      console.log("Datos recibidos:", {
         stationId,
         deviceId,
         voltage,
-        timestamp: timestampISO
+        timestamp: timestampISO,
       });
 
       // Procesar dispositivo
@@ -268,39 +303,92 @@ async function processMQTTMessage(topic, message) {
 
       // Procesar sensores
       for (const sensorStr of sensorData) {
-        console.log('Procesando sensor:', sensorStr);
-        const [sensorId, sensorType, sensorValue] = sensorStr.split(',');
-        
-        // Convertir 'nan' a null para valores no disponibles
-        const value = sensorValue.toLowerCase() === 'nan' ? null : parseFloat(sensorValue);
-        
-        console.log('Datos del sensor:', {
-          sensorId,
-          sensorType,
-          sensorValue,
-          parsedValue: value
-        });
-        
-        // Crear objeto sensor con el formato esperado por handleSensor
-        const sensor = {
-          id: sensorId,
-          t: parseInt(sensorType),
-          v: value
-        };
-        
-        await handleSensor(sensor, stationId, timestampISO);
+        console.log("Procesando sensor:", sensorStr);
+
+        // Dividir los datos del sensor por comas
+        const sensorParts = sensorStr.split(",");
+        const sensorId = sensorParts[0];
+        const sensorType = parseInt(sensorParts[1]);
+
+        // Verificar si es un sensor multi-valor como SHT30
+        if (MULTI_SENSOR_MAP[sensorType] && sensorParts.length > 3) {
+          console.log(
+            `Procesando sensor multivalor: ${sensorId} de tipo ${sensorType}`
+          );
+
+          // Procesar cada valor según la configuración del mapa
+          for (const config of MULTI_SENSOR_MAP[sensorType]) {
+            const valueIndex = config.index + 2; // +2 porque los primeros 2 son id y tipo
+
+            if (sensorParts.length > valueIndex) {
+              const sensorValue = sensorParts[valueIndex];
+              // Convertir 'nan' a null para valores no disponibles
+              const value =
+                sensorValue.toLowerCase() === "nan"
+                  ? null
+                  : parseFloat(sensorValue);
+
+              if (value !== null) {
+                // Crear un nuevo ID con el sufijo correspondiente
+                const newSensorId = `${sensorId}${config.id_suffix}`;
+
+                console.log(
+                  `Procesando subvalor: ${newSensorId} con valor ${value}`
+                );
+
+                // Crear objeto sensor con el formato esperado por handleSensor
+                const sensor = {
+                  id: newSensorId,
+                  t: config.typeEnum,
+                  v: value,
+                };
+
+                await handleSensor(sensor, stationId, timestampISO);
+              } else {
+                console.log(
+                  `Omitiendo valor nulo para ${sensorId}${config.id_suffix}`
+                );
+              }
+            }
+          }
+        } else {
+          // Procesamiento normal para sensores de un solo valor
+          const sensorValue = sensorParts[2];
+
+          // Convertir 'nan' a null para valores no disponibles
+          const value =
+            sensorValue.toLowerCase() === "nan"
+              ? null
+              : parseFloat(sensorValue);
+
+          console.log("Datos del sensor:", {
+            sensorId,
+            sensorType,
+            sensorValue,
+            parsedValue: value,
+          });
+
+          // Crear objeto sensor con el formato esperado por handleSensor
+          const sensor = {
+            id: sensorId,
+            t: sensorType,
+            v: value,
+          };
+
+          await handleSensor(sensor, stationId, timestampISO);
+        }
       }
     } catch (timeError) {
-      console.error('Error al procesar el timestamp:', {
+      console.error("Error al procesar el timestamp:", {
         timestamp,
         error: timeError.message,
-        stack: timeError.stack
+        stack: timeError.stack,
       });
     }
   } catch (err) {
     console.error("Error al procesar mensaje:", {
       error: err.message,
-      stack: err.stack
+      stack: err.stack,
     });
   }
 }
