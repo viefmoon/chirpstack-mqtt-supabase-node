@@ -351,8 +351,9 @@ async function processMQTTMessage(topic, message) {
               }
             }
           }
-        } else {
+        } else if (!MULTI_SENSOR_MAP[sensorType]) {
           // Procesamiento normal para sensores de un solo valor
+          // Solo procesar si NO es un sensor múltiple
           const sensorValue = sensorParts[2];
 
           // Convertir 'nan' a null para valores no disponibles
@@ -376,6 +377,10 @@ async function processMQTTMessage(topic, message) {
           };
 
           await handleSensor(sensor, stationId, timestampISO);
+        } else {
+          console.log(
+            `Sensor multivalor ${sensorId} tipo ${sensorType} detectado pero formato incorrecto`
+          );
         }
       }
     } catch (timeError) {
