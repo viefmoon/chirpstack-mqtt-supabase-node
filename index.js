@@ -16,6 +16,9 @@ const SENSORS_TABLE = "sensors";
 const STATIONS_TABLE = "stations"; // Añadir constante para tabla stations
 const SENSOR_TYPES_TABLE = "sensor_types"; // Añadir constante para tabla sensor_types
 
+const BATCH_SIZE = 100; // Número máximo de registros a insertar a la vez
+const BATCH_INTERVAL = 5000; // Intervalo de tiempo para procesar el lote (ms)
+
 const SENSOR_TYPE_ENUM_MAP = {
   0: "N100K",
   1: "N10K",
@@ -47,12 +50,104 @@ const MULTI_SENSOR_MAP = {
 // --- Inicialización Supabase (sin cambios) ---
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// --- OPTIMIZACIÓN: Cachés en Memoria ---
+// --- OPTIMIZACIÓN: Cachés en Memoria y Batch Processing ---
 const knownStations = new Set();
 const knownDevices = new Set();
 const knownSensorTypes = new Set();
 const knownSensors = new Set();
-// -----------------------------------------
+
+// Colas para procesamiento por lotes
+const readingsBatch = [];
+const voltageReadingsBatch = [];
+
+// --- PRECARGA de datos existentes ---
+async function preloadExistingData() {
+  console.log("Iniciando precarga de datos existentes...");
+
+  try {
+    // Cargar estaciones
+    const { data: stations, error: stationsError } = await supabase
+      .from(STATIONS_TABLE)
+      .select("id");
+
+    if (stationsError) throw stationsError;
+    stations.forEach((station) => knownStations.add(station.id));
+    console.log(`Precargadas ${stations.length} estaciones`);
+
+    // Cargar dispositivos
+    const { data: devices, error: devicesError } = await supabase
+      .from(DEVICES_TABLE)
+      .select("id");
+
+    if (devicesError) throw devicesError;
+    devices.forEach((device) => knownDevices.add(device.id));
+    console.log(`Precargados ${devices.length} dispositivos`);
+
+    // Cargar tipos de sensores
+    const { data: sensorTypes, error: sensorTypesError } = await supabase
+      .from(SENSOR_TYPES_TABLE)
+      .select("id");
+
+    if (sensorTypesError) throw sensorTypesError;
+    sensorTypes.forEach((type) => knownSensorTypes.add(type.id));
+    console.log(`Precargados ${sensorTypes.length} tipos de sensores`);
+
+    // Cargar sensores (solo IDs para la caché)
+    const { data: sensors, error: sensorsError } = await supabase
+      .from(SENSORS_TABLE)
+      .select("id");
+
+    if (sensorsError) throw sensorsError;
+    sensors.forEach((sensor) => knownSensors.add(sensor.id));
+    console.log(`Precargados ${sensors.length} sensores`);
+
+    console.log("Precarga de datos completada con éxito");
+  } catch (error) {
+    console.error("Error durante la precarga de datos:", error);
+  }
+}
+
+// Procesamiento por lotes para lecturas
+async function processBatches() {
+  try {
+    // Procesar lecturas de sensores
+    if (readingsBatch.length > 0) {
+      const batchToProcess = [...readingsBatch];
+      readingsBatch.length = 0; // Limpiar la cola original
+
+      const { error } = await supabase
+        .from(READINGS_TABLE)
+        .insert(batchToProcess);
+
+      if (error) {
+        console.error("Error al insertar lote de lecturas:", error);
+        // En caso de error, podríamos intentar reinsertar o procesar uno por uno
+      } else {
+        console.log(`Procesado lote de ${batchToProcess.length} lecturas`);
+      }
+    }
+
+    // Procesar lecturas de voltaje
+    if (voltageReadingsBatch.length > 0) {
+      const batchToProcess = [...voltageReadingsBatch];
+      voltageReadingsBatch.length = 0; // Limpiar la cola original
+
+      const { error } = await supabase
+        .from(VOLTAGE_READINGS_TABLE)
+        .insert(batchToProcess);
+
+      if (error) {
+        console.error("Error al insertar lote de lecturas de voltaje:", error);
+      } else {
+        console.log(
+          `Procesado lote de ${batchToProcess.length} lecturas de voltaje`
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Error en procesamiento por lotes:", err);
+  }
+}
 
 // --- Funciones Auxiliares Optimizadas ---
 
@@ -176,23 +271,21 @@ async function ensureSensorExists(sensorId, sensorTypeId, stationId) {
   return true;
 }
 
-// Función para manejar lecturas de voltaje (sin cambios grandes, pero podría beneficiarse de batching)
-async function handleVoltageReading(deviceId, voltage, timestamp) {
-  // Considerar añadir esta inserción a un buffer para batching si el volumen es alto
-  const { data: voltageReadingData, error: voltageReadingError } =
-    await supabase
-      .from(VOLTAGE_READINGS_TABLE)
-      .insert([{ device_id: deviceId, voltage_value: voltage, timestamp }])
-      .select(); // select() opcional si no necesitas el resultado
+// Función para manejar lecturas de voltaje (optimizada con batch)
+function handleVoltageReading(deviceId, voltage, timestamp) {
+  voltageReadingsBatch.push({
+    device_id: deviceId,
+    voltage_value: voltage,
+    timestamp,
+  });
 
-  if (voltageReadingError) {
-    console.error("Error al insertar voltage reading:", voltageReadingError);
-  } else {
-    // console.log("Voltage reading insertado:", voltageReadingData?.[0]); // Log menos verboso
+  // Si alcanzamos el tamaño del lote, procesar inmediatamente
+  if (voltageReadingsBatch.length >= BATCH_SIZE) {
+    processBatches();
   }
 }
 
-// Función para manejar una lectura de sensor individual (ahora usa las funciones "ensure")
+// Función para manejar una lectura de sensor individual (ahora usa batching)
 async function handleSensorReading(
   sensorId,
   sensorTypeEnum,
@@ -227,24 +320,16 @@ async function handleSensorReading(
     return; // Importante: No insertar lectura si el sensor no pudo ser asegurado/creado
   }
 
-  // 3. Insertar la lectura (Considerar añadir esta inserción a un buffer para batching)
-  const { error: readingInsertError } = await supabase
-    .from(READINGS_TABLE)
-    .insert([
-      {
-        sensor_id: sensorId,
-        value: value,
-        timestamp,
-      },
-    ]);
+  // 3. Añadir la lectura al lote en lugar de insertar directamente
+  readingsBatch.push({
+    sensor_id: sensorId,
+    value: value,
+    timestamp,
+  });
 
-  if (readingInsertError) {
-    console.error(
-      `Error al insertar lectura para el sensor ${sensorId}:`,
-      readingInsertError
-    );
-  } else {
-    // console.log(`Lectura insertada para ${sensorId}`); // Log menos verboso
+  // Si alcanzamos el tamaño del lote, procesar inmediatamente
+  if (readingsBatch.length >= BATCH_SIZE) {
+    processBatches();
   }
 }
 
@@ -289,7 +374,7 @@ async function processMQTTMessage(topic, message) {
     // 2. Procesar Lectura de Voltaje
     const voltage = parseFloat(voltageStr);
     if (!isNaN(voltage)) {
-      await handleVoltageReading(deviceId, voltage, timestampISO);
+      handleVoltageReading(deviceId, voltage, timestampISO);
     } else {
       // console.log(`Valor de voltaje no válido para ${deviceId}: ${voltageStr}`);
     }
@@ -368,8 +453,14 @@ async function processMQTTMessage(topic, message) {
   }
 }
 
-// --- Función Principal (sin cambios) ---
+// --- Función Principal (modificada para incluir precarga y procesamiento por lotes) ---
 async function main() {
+  // Precargar datos existentes para optimizar
+  await preloadExistingData();
+
+  // Iniciar el procesamiento por lotes periódico
+  setInterval(processBatches, BATCH_INTERVAL);
+
   const brokerUrl = `mqtt://${MQTT_HOST}:${MQTT_PORT}`;
   const client = mqtt.connect(brokerUrl);
 
@@ -384,13 +475,20 @@ async function main() {
     });
   });
 
-  // Procesar mensajes uno por uno. Si la carga es muy alta, podrías necesitar un pool o cola.
   client.on("message", (topic, message) => {
-    processMQTTMessage(topic, message); // No usar await aquí para no bloquear la recepción de nuevos mensajes
+    processMQTTMessage(topic, message);
   });
 
   client.on("error", (err) => {
     console.error("Error en la conexión MQTT:", err);
+  });
+
+  // Manejar cierre limpio
+  process.on("SIGINT", async () => {
+    console.log("Cerrando aplicación, procesando lotes pendientes...");
+    await processBatches();
+    console.log("Procesamiento finalizado. Saliendo.");
+    process.exit(0);
   });
 
   console.log(`Intentando conectar a ${brokerUrl}...`);
