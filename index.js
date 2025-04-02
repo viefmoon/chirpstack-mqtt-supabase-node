@@ -19,32 +19,237 @@ const SENSOR_TYPES_TABLE = "sensor_types"; // Añadir constante para tabla senso
 const BATCH_SIZE = 100; // Número máximo de registros a insertar a la vez
 const BATCH_INTERVAL = 5000; // Intervalo de tiempo para procesar el lote (ms)
 
-const SENSOR_TYPE_ENUM_MAP = {
-  0: "N100K",
-  1: "N10K",
-  2: "HDS10",
-  3: "RTD",
-  4: "DS18B20",
-  5: "PH",
-  6: "COND",
-  7: "CONDH",
-  8: "SOILH",
-  9: "TEMP_A",
-  10: "HUM_A",
-  11: "PRESS_A",
-  12: "CO2",
-  13: "LIGHT",
-  14: "ROOTH",
-  15: "LEAFH",
-  100: "SHT30",
+// Mapeo de nombres de variables a sus IDs en la base de datos
+// Estos son los identificadores que se usan para insertar en la tabla SENSOR_TYPES_TABLE
+const SENSOR_TYPE_IDS = {
+  TEMPERATURA: "TEMP", // ID para temperatura
+  HUMEDAD: "HUM", // ID para humedad
+  PH: "PH", // ID para pH
+  COND: "COND", // ID para conductividad
+  SOILH: "SOILH", // ID para humedad del suelo
+  CO2: "CO2", // ID para CO2
+  LUX: "LUX", // ID para iluminación
+  PRESION: "PRES", // ID para presión
+  GAS: "GAS", // ID para resistencia del gas (KOhms)
 };
 
-const MULTI_SENSOR_MAP = {
-  100: [
-    // SHT30
-    { id_suffix: "_T", typeEnum: 9, index: 0 }, // Temperatura
-    { id_suffix: "_H", typeEnum: 10, index: 1 }, // Humedad
-  ],
+// Mapeo completo: cada ENUM (valor numérico) mapea a su modelo y tipos de sensores
+// Estructura unificada para todos los sensores, sean de valor único o múltiple
+const SENSOR_CONFIG = {
+  // --- Sensores de valor único ---
+  0: {
+    model: "N100K", // Modelo del sensor
+    types: [
+      // Tipos de variables que mide
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.TEMPERATURA,
+        id_suffix: "", // Vacío para sensores de valor único
+        index: 0, // Siempre 0 para sensores de valor único
+      },
+    ],
+  },
+  1: {
+    model: "N10K",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.TEMPERATURA,
+        id_suffix: "",
+        index: 0,
+      },
+    ],
+  },
+  2: {
+    model: "HDS10",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.HUMEDAD,
+        id_suffix: "",
+        index: 0,
+      },
+    ],
+  },
+  3: {
+    model: "RTD",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.TEMPERATURA,
+        id_suffix: "",
+        index: 0,
+      },
+    ],
+  },
+  4: {
+    model: "DS18B20",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.TEMPERATURA,
+        id_suffix: "",
+        index: 0,
+      },
+    ],
+  },
+  5: {
+    model: "PH",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.PH,
+        id_suffix: "",
+        index: 0,
+      },
+    ],
+  },
+  6: {
+    model: "COND",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.COND,
+        id_suffix: "",
+        index: 0,
+      },
+    ],
+  },
+  7: {
+    model: "SOILH",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.SOILH,
+        id_suffix: "",
+        index: 0,
+      },
+    ],
+  },
+  8: {
+    model: "VEML7700",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.LUX,
+        id_suffix: "",
+        index: 0,
+      },
+    ],
+  },
+
+  // --- Sensores múltiples ---
+  100: {
+    model: "SHT30",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.TEMPERATURA,
+        id_suffix: "_T",
+        index: 0,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.HUMEDAD,
+        id_suffix: "_H",
+        index: 1,
+      },
+    ],
+  },
+  101: {
+    model: "BME680",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.TEMPERATURA,
+        id_suffix: "_T",
+        index: 0,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.HUMEDAD,
+        id_suffix: "_H",
+        index: 1,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.PRESION,
+        id_suffix: "_P",
+        index: 2,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.GAS,
+        id_suffix: "_G",
+        index: 3,
+      },
+    ],
+  },
+  102: {
+    model: "CO2",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.CO2,
+        id_suffix: "_CO2",
+        index: 0,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.TEMPERATURA,
+        id_suffix: "_T",
+        index: 1,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.HUMEDAD,
+        id_suffix: "_H",
+        index: 2,
+      },
+    ],
+  },
+  103: {
+    model: "BME280",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.TEMPERATURA,
+        id_suffix: "_T",
+        index: 0,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.HUMEDAD,
+        id_suffix: "_H",
+        index: 1,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.PRESION,
+        id_suffix: "_P",
+        index: 2,
+      },
+    ],
+  },
+  104: {
+    model: "SHT40",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.TEMPERATURA,
+        id_suffix: "_T",
+        index: 0,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.HUMEDAD,
+        id_suffix: "_H",
+        index: 1,
+      },
+    ],
+  },
+  110: {
+    model: "ENV4",
+    types: [
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.HUMEDAD,
+        id_suffix: "_H",
+        index: 0,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.TEMPERATURA,
+        id_suffix: "_T",
+        index: 1,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.PRESION,
+        id_suffix: "_P",
+        index: 2,
+      },
+      {
+        sensor_type_id: SENSOR_TYPE_IDS.LUX,
+        id_suffix: "_L",
+        index: 3,
+      },
+    ],
+  },
 };
 
 // --- Inicialización Supabase (sin cambios) ---
@@ -177,10 +382,10 @@ async function ensureStationExists(stationId) {
   return true;
 }
 
-async function ensureSensorTypeExists(sensorTypeEnum) {
-  const sensorTypeId = SENSOR_TYPE_ENUM_MAP[sensorTypeEnum];
+async function ensureSensorTypeExists(sensorTypeId) {
+  // Verificar si el tipo de sensor es válido
   if (!sensorTypeId) {
-    console.error(`Tipo de sensor no válido en mapeo: ${sensorTypeEnum}`);
+    console.error(`Tipo de sensor no válido: ${sensorTypeId}`);
     return null; // Devolver null para indicar fallo
   }
 
@@ -194,7 +399,7 @@ async function ensureSensorTypeExists(sensorTypeEnum) {
     .upsert(
       { id: sensorTypeId, name: sensorTypeId },
       { onConflict: "id", ignoreDuplicates: true }
-    ); // Ajusta 'id' si tu PK tiene otro nombre
+    );
 
   if (error) {
     console.error(
@@ -288,7 +493,7 @@ function handleVoltageReading(deviceId, voltage, timestamp) {
 // Función para manejar una lectura de sensor individual (ahora usa batching)
 async function handleSensorReading(
   sensorId,
-  sensorTypeEnum,
+  sensorTypeId,
   value,
   stationId,
   timestamp
@@ -303,16 +508,20 @@ async function handleSensorReading(
   }
 
   // 1. Asegurar que el tipo de sensor existe (usa caché + upsert)
-  const sensorTypeId = await ensureSensorTypeExists(sensorTypeEnum);
-  if (!sensorTypeId) {
+  const confirmedSensorTypeId = await ensureSensorTypeExists(sensorTypeId);
+  if (!confirmedSensorTypeId) {
     console.error(
-      `No se pudo asegurar el tipo de sensor ${sensorTypeEnum} para el sensor ${sensorId}. Abortando lectura.`
+      `No se pudo asegurar el tipo de sensor ${sensorTypeId} para el sensor ${sensorId}. Abortando lectura.`
     );
     return;
   }
 
   // 2. Asegurar que el sensor existe (usa caché + upsert)
-  const sensorOk = await ensureSensorExists(sensorId, sensorTypeId, stationId);
+  const sensorOk = await ensureSensorExists(
+    sensorId,
+    confirmedSensorTypeId,
+    stationId
+  );
   if (!sensorOk) {
     console.error(
       `No se pudo asegurar el sensor ${sensorId}. Abortando lectura.`
@@ -337,7 +546,7 @@ async function handleSensorReading(
 async function processMQTTMessage(topic, message) {
   try {
     const payloadStr = message.toString();
-    // console.log("Mensaje MQTT recibido:", { topic, payload: payloadStr }); // Menos verbosidad
+    // console.log("Mensaje MQTT recibido:", { topic, payload: payloadStr });
 
     const messageJson = JSON.parse(payloadStr);
     const decodedData = Buffer.from(messageJson.data, "base64").toString(
@@ -388,61 +597,72 @@ async function processMQTTMessage(topic, message) {
       }
 
       const sensorId = sensorParts[0];
-      const sensorType = parseInt(sensorParts[1]);
+      const sensorModelEnum = parseInt(sensorParts[1]);
 
-      if (isNaN(sensorType)) {
+      if (isNaN(sensorModelEnum)) {
         console.warn(
           `Tipo de sensor inválido para ${sensorId}: "${sensorParts[1]}"`
         );
         continue;
       }
 
-      // Manejo de Sensores Múltiples (como SHT30)
-      if (MULTI_SENSOR_MAP[sensorType] && sensorParts.length > 2) {
-        // Necesita al menos id, tipo, valor1...
-        // console.log(`Procesando sensor multivalor: ${sensorId} tipo ${sensorType}`);
-        for (const config of MULTI_SENSOR_MAP[sensorType]) {
-          const valueIndex = config.index + 2; // id, tipo, valor0, valor1...
-          if (sensorParts.length > valueIndex) {
-            const rawValue = sensorParts[valueIndex];
-            const value =
-              rawValue.toLowerCase() === "nan" ? null : parseFloat(rawValue);
-            const derivedSensorId = `${sensorId}${config.id_suffix}`;
-
-            // Usar la función de manejo de lectura individual
-            await handleSensorReading(
-              derivedSensorId,
-              config.typeEnum,
-              value,
-              stationId,
-              timestampISO
-            );
-          }
-        }
+      // Verificar si el tipo de sensor existe en la configuración
+      if (!SENSOR_CONFIG[sensorModelEnum]) {
+        console.warn(
+          `Sensor no configurado: ${sensorId} tipo ${sensorModelEnum}`
+        );
+        continue;
       }
-      // Manejo de Sensores de Valor Único
-      else if (!MULTI_SENSOR_MAP[sensorType]) {
-        const rawValue = sensorParts[2];
+
+      const sensorConfig = SENSOR_CONFIG[sensorModelEnum];
+      console.log(
+        `Procesando sensor: ${sensorId} modelo ${sensorConfig.model}`
+      );
+
+      // Manejar sensores (múltiples o de valor único usando la misma lógica)
+      for (const typeConfig of sensorConfig.types) {
+        const valueIndex = typeConfig.index + 2; // id, tipo, valor0, valor1...
+
+        // Verificar que tengamos suficientes valores en el mensaje
+        if (sensorParts.length <= valueIndex) {
+          console.warn(
+            `No hay suficientes valores para el sensor ${sensorId} (índice ${valueIndex})`
+          );
+          continue;
+        }
+
+        const rawValue = sensorParts[valueIndex];
         const value =
           rawValue.toLowerCase() === "nan" ? null : parseFloat(rawValue);
 
+        // Para sensores de valor único, no usar sufijo
+        const derivedSensorId = typeConfig.id_suffix
+          ? `${sensorId}${typeConfig.id_suffix}`
+          : sensorId;
+
+        if (value === null || value === undefined) {
+          console.log(`Omitiendo valor nulo para ${derivedSensorId}`);
+          continue;
+        }
+
+        console.log(
+          `Procesando lectura para ${derivedSensorId} tipo ${typeConfig.sensor_type_id}`
+        );
+
         // Usar la función de manejo de lectura individual
         await handleSensorReading(
-          sensorId,
-          sensorType,
+          derivedSensorId,
+          typeConfig.sensor_type_id,
           value,
           stationId,
           timestampISO
         );
-      } else {
-        console.warn(
-          `Sensor multivalor ${sensorId} tipo ${sensorType} detectado pero formato inesperado: ${sensorStr}`
-        );
       }
     }
+
     console.log(
       `Mensaje procesado para Estación: ${stationId}, Dispositivo: ${deviceId}`
-    ); // Log al final del procesamiento
+    );
   } catch (err) {
     console.error("Error fatal al procesar mensaje MQTT:", {
       errorMessage: err.message,
